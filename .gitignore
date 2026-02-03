@@ -4,3 +4,13 @@ __pycache__/
 *.pt
 *.bin
 *.ckptdata/*filtered*.csv
+# Large ML model files
+model/*.safetensors
+model/*.pt
+model/*.bin
+model/*.ckpt
+
+# Python
+venv/
+__pycache__/
+*.pyc
