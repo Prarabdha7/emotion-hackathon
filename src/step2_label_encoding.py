@@ -48,6 +48,8 @@ mapping = {
 
 with open(LABEL_MAP_PATH, "w", encoding="utf-8") as f:
     json.dump(mapping, f, indent=4, ensure_ascii=False)
+print("\nDEBUG — keys written to JSON:")
+print(mapping.keys())    
 
 # Save dataset
 df.to_csv(DATA_PATH, index=False)
@@ -56,5 +58,6 @@ print("Total labels:", len(label2id))
 print("Sample mapping:")
 for i in range(5):
     print(f"{i}: {id2label[str(i)]} -> {id2sanitized[str(i)]}")
+   
 
 print("Step 2 completed cleanly.")
