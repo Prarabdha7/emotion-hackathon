@@ -1,36 +1,42 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from navarasa_mapping import map_to_navarasa
 import json
+from pathlib import Path
 
-MODEL_DIR = "model"
-TOKENIZER_DIR = "tokenizer_base"
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+BASE_DIR = Path(__file__).resolve().parent.parent
+ARTIFACTS_DIR = BASE_DIR / "artifacts"
+MODEL_DIR = BASE_DIR / "model"
+
+BASE_MODEL = "distilbert-base-multilingual-cased"
 
 # Load label mapping
-with open("artifacts/label_mapping.json", "r", encoding="utf-8") as f:
-    id2label = {int(k): v for k, v in json.load(f)["id2label"].items()}
+with open(ARTIFACTS_DIR / "label_mapping.json", "r", encoding="utf-8") as f:
+    label_map = json.load(f)
+
+id2label = {int(v): k for k, v in label_map["label2id"].items()}
 
 # Load model & tokenizer
-tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_DIR, use_fast=False)
+tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR)
-model.to(DEVICE)
 model.eval()
 
-def predict_emotion(text):
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-    inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
-    with torch.no_grad():
-        logits = model(**inputs).logits
-    pred_id = torch.argmax(logits, dim=1).item()
-    emotion = id2label[pred_id]
-    navarasa = map_to_navarasa(emotion)
-    return emotion, navarasa
+# ---- SAMPLE INPUT ----
+text = "I feel calm and hopeful after a long time."
 
-# ---------------- DEMO ----------------
-text = "My heart feels heavy with sorrow and longing."
-emotion, navarasa = predict_emotion(text)
+inputs = tokenizer(
+    text,
+    return_tensors="pt",
+    truncation=True,
+    padding=True,
+    max_length=128
+)
 
-print("Text:", text)
-print("Predicted Emotion:", emotion)
-print("Mapped Navarasa:", navarasa)
+with torch.no_grad():
+    outputs = model(**inputs)
+    probs = torch.softmax(outputs.logits, dim=1)
+    pred_id = torch.argmax(probs, dim=1).item()
+
+print("Input Text:")
+print(text)
+print("\nPredicted Emotion:", id2label[pred_id])
+print("Confidence:", round(probs[0][pred_id].item(), 3))
