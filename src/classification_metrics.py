@@ -1,68 +1,57 @@
-import torch
 import pandas as pd
-import numpy as np
+import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from sklearn.metrics import accuracy_score, f1_score, classification_report
+from tqdm import tqdm
 
-# =====================
-# CONFIG
-# =====================
-DATA_PATH = "data/primary_emotions_filtered.csv"
+# ---------------- PATHS ----------------
+DATA_PATH = "data/primary_emotions_clean.csv"
 MODEL_DIR = "model"
-BASE_MODEL = "distilbert-base-multilingual-cased"
+
 TEXT_COL = "Poem"
 LABEL_COL = "label_id"
-MAX_LEN = 128
 
-# =====================
-# LOAD DATA
-# =====================
+# ---------------- LOAD DATA ----------------
 df = pd.read_csv(DATA_PATH)
+df = df[[TEXT_COL, LABEL_COL]].dropna()
 
 texts = df[TEXT_COL].astype(str).tolist()
-labels = df[LABEL_COL].tolist()
+labels = df[LABEL_COL].astype(int).tolist()
 
-# =====================
-# LOAD MODEL
-# =====================
-tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+# ---------------- LOAD MODEL ----------------
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+tokenizer = AutoTokenizer.from_pretrained("distilbert-base-multilingual-cased")
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR)
-
-device = torch.device("cpu")
 model.to(device)
 model.eval()
 
-# =====================
-# TOKENIZE
-# =====================
-inputs = tokenizer(
-    texts,
-    padding=True,
-    truncation=True,
-    max_length=MAX_LEN,
-    return_tensors="pt"
-)
+# ---------------- INFERENCE ----------------
+preds = []
 
-# =====================
-# PREDICTION
-# =====================
 with torch.no_grad():
-    outputs = model(
-        input_ids=inputs["input_ids"],
-        attention_mask=inputs["attention_mask"]
-    )
-    preds = torch.argmax(outputs.logits, dim=1).cpu().numpy()
+    for text in tqdm(texts, desc="Running inference"):
+        inputs = tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            padding=True,
+            max_length=128
+        ).to(device)
 
-# =====================
-# METRICS
-# =====================
+        outputs = model(**inputs)
+        pred = torch.argmax(outputs.logits, dim=1).item()
+        preds.append(pred)
+
+# ---------------- METRICS ----------------
 accuracy = accuracy_score(labels, preds)
 macro_f1 = f1_score(labels, preds, average="macro")
 weighted_f1 = f1_score(labels, preds, average="weighted")
 
-print(f"Accuracy: {accuracy:.4f}")
+print("\n=== Classification Metrics ===")
+print(f"Accuracy      : {accuracy:.4f}")
 print(f"Macro F1-score: {macro_f1:.4f}")
-print(f"Weighted F1-score: {weighted_f1:.4f}")
+print(f"Weighted F1   : {weighted_f1:.4f}")
 
-print("\nDetailed Classification Report:")
+print("\n=== Detailed Classification Report ===")
 print(classification_report(labels, preds))
